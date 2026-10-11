@@ -1,0 +1,127 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  CUSTOMER
+  VENDOR
+  ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  passwordHash  String
+  role          Role           @default(CUSTOMER)
+  isVerified    Boolean        @default(false)
+  mfaSecret     String?
+  mfaEnabled    Boolean        @default(false)
+  fullName      String?
+  vendor        Vendor?
+  orders        Order[]
+  refreshTokens RefreshToken[]
+  createdAt     DateTime       @default(now())
+}
+
+model Vendor {
+  id         String    @id @default(cuid())
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId     String    @unique
+  storeName  String
+  storeSlug  String    @unique
+  logoUrl    String?
+  isApproved Boolean   @default(false)
+  products   Product[]
+  payouts    Payout[]
+}
+
+model Category {
+  id       String    @id @default(cuid())
+  name     String
+  slug     String    @unique
+  products Product[]
+}
+
+model Product {
+  id          String        @id @default(cuid())
+  vendor      Vendor        @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendorId    String
+  name        String
+  slug        String        @unique
+  description String?
+  price       Decimal       @db.Decimal(10, 2)
+  currency    String        @default("SAR")
+  stock       Int           @default(0)
+  status      ProductStatus @default(DRAFT)
+  images      Json          @default("[]")
+  category    Category?     @relation(fields: [categoryId], references: [id])
+  categoryId  String?
+  orderItems  OrderItem[]
+  createdAt   DateTime      @default(now())
+
+  @@index([vendorId, status])
+  @@index([categoryId])
+}
+
+model Order {
+  id         String      @id @default(cuid())
+  customer   User        @relation(fields: [customerId], references: [id])
+  customerId String
+  status     OrderStatus @default(PENDING)
+  total      Decimal     @db.Decimal(10, 2)
+  items      OrderItem[]
+  createdAt  DateTime    @default(now())
+
+  @@index([customerId])
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId   String
+  product   Product @relation(fields: [productId], references: [id])
+  productId String
+  qty       Int
+  price     Decimal @db.Decimal(10, 2)
+
+  @@index([productId])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+
+  @@index([userId])
+}
+
+model Payout {
+  id       String    @id @default(cuid())
+  vendor   Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendorId String
+  amount   Decimal   @db.Decimal(10, 2)
+  paidAt   DateTime?
+
+  @@index([vendorId])
+}
